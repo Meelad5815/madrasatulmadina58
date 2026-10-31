@@ -94,14 +94,16 @@ export const assignStudentToQari = onCall({ region: REGION }, async (request) =>
     throw new HttpsError('failed-precondition', 'منتخب قاری کا فعال اکاؤنٹ موجود نہیں۔');
   }
   const assignmentId = `${qariUid}_${studentId}`;
-  await db.collection('student_assignments').doc(assignmentId).set({
-    madrasaId: MADRASA_ID,
-    studentId,
-    qariUid,
-    assignedBy: actorUid,
-    assignedAt: FieldValue.serverTimestamp(),
-    status: 'active',
+  const oldAssignments = await db.collection('student_assignments').where('studentId', '==', studentId).where('status', '==', 'active').get();
+  const batch = db.batch();
+  oldAssignments.docs.forEach((old) => {
+    if (old.id !== assignmentId) batch.update(old.ref, { status: 'inactive', unassignedBy: actorUid, unassignedAt: FieldValue.serverTimestamp() });
   });
+  batch.set(db.collection('student_assignments').doc(assignmentId), {
+    madrasaId: MADRASA_ID, studentId, qariUid, assignedBy: actorUid,
+    assignedAt: FieldValue.serverTimestamp(), status: 'active',
+  });
+  await batch.commit();
   await writeAudit(actorUid, 'student.assigned', 'student_assignment', assignmentId);
   return { assignmentId, studentId, qariUid };
 });
