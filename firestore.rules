@@ -21,7 +21,8 @@ service cloud.firestore {
 
     match /public_content/{docId} {
       allow read: if resource.data.status == 'published' && resource.data.visibility == 'public';
-      allow write: if false;
+      allow create, update: if isAdmin() && sameMadrasa(request.resource.data);
+      allow delete: if isAdmin() && sameMadrasa(resource.data);
     }
 
     match /announcements/{docId} {
@@ -53,15 +54,15 @@ service cloud.firestore {
     }
 
     match /student_assignments/{assignmentId} {
-      allow read: if isAdmin()
-        || (signedIn() && resource.data.qariUid == request.auth.uid)
-        || (isParent() && parentLinked(resource.data.studentId));
+      allow read: if (isAdmin() && sameMadrasa(resource.data))
+        || (signedIn() && sameMadrasa(resource.data) && resource.data.qariUid == request.auth.uid)
+        || (isParent() && sameMadrasa(resource.data) && parentLinked(resource.data.studentId));
       allow write: if false;
     }
 
     match /student_parent_links/{linkId} {
-      allow read: if isAdmin()
-        || (signedIn() && resource.data.parentUid == request.auth.uid);
+      allow read: if (isAdmin() && sameMadrasa(resource.data))
+        || (signedIn() && sameMadrasa(resource.data) && resource.data.parentUid == request.auth.uid);
       allow write: if false;
     }
 
