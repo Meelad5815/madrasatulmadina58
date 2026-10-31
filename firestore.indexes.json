@@ -121,6 +121,24 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "progress_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "madrasaId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "studentId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "parentVisible",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
