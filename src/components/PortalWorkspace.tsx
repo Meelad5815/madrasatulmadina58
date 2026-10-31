@@ -48,10 +48,10 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
         setLoading(false); return
       }
       if (session.role === 'qari') {
-        const assignments = await getDocs(query(collection(db, 'student_assignments'), where('qariUid', '==', session.user.uid), where('status', '==', 'active'), limit(100)))
+        const assignments = await getDocs(query(collection(db, 'student_assignments'), where('madrasaId', '==', session.madrasaId), where('qariUid', '==', session.user.uid), where('status', '==', 'active'), limit(100)))
         ids = assignments.docs.map(item => String(item.data().studentId))
       } else if (session.role === 'parent') {
-        const links = await getDocs(query(collection(db, 'student_parent_links'), where('parentUid', '==', session.user.uid), where('verified', '==', true), limit(30)))
+        const links = await getDocs(query(collection(db, 'student_parent_links'), where('madrasaId', '==', session.madrasaId), where('parentUid', '==', session.user.uid), where('verified', '==', true), limit(30)))
         ids = links.docs.map(item => String(item.data().studentId))
       }
       const rows = await Promise.all(ids.map(async id => {
