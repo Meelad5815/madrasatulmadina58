@@ -66,6 +66,16 @@ export const createManagedAccount = onCall({ region: REGION }, async (request) =
     createdAt: FieldValue.serverTimestamp(),
     createdBy: actorUid,
   });
+  const profileCollection = role === 'qari' ? 'teachers' : 'parents';
+  await db.collection(profileCollection).doc(user.uid).set({
+    uid: user.uid,
+    email,
+    displayName,
+    madrasaId: MADRASA_ID,
+    status: 'active',
+    joinedAt: FieldValue.serverTimestamp(),
+    createdBy: actorUid,
+  });
   await writeAudit(actorUid, 'account.created', 'user', user.uid);
   return { uid: user.uid, email, displayName, role, temporaryPassword };
 });
@@ -259,4 +269,76 @@ export const recordDailyProgress = onCall({ region: REGION }, async (request) =>
   });
   await writeAudit(caller.uid, 'progress.recorded', 'progress_log', recordId);
   return { recordId };
+});
+
+
+export const updateStudent = onCall({ region: REGION }, async (request) => {
+  const actorUid = requireAdmin(request);
+  const studentId = requiredString(request.data?.studentId, 'studentId', 128);
+  const ref = db.collection('students').doc(studentId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.madrasaId !== MADRASA_ID) {
+    throw new HttpsError('not-found', 'طالب علم کا ریکارڈ نہیں ملا۔');
+  }
+  const patch: Record<string, unknown> = {};
+  if (request.data?.fullName !== undefined) patch.fullName = requiredString(request.data.fullName, 'fullName', 120);
+  if (request.data?.program !== undefined) {
+    if (!['hifz', 'nazra', 'qaida'].includes(request.data.program)) throw new HttpsError('invalid-argument', 'تعلیمی شعبہ درست نہیں۔');
+    patch.program = request.data.program;
+  }
+  if (request.data?.status !== undefined) {
+    if (!['active', 'inactive', 'transferred', 'completed'].includes(request.data.status)) throw new HttpsError('invalid-argument', 'طالب علم کی حیثیت درست نہیں۔');
+    patch.status = request.data.status;
+  }
+  if (request.data?.admissionDate !== undefined) {
+    const date = requiredString(request.data.admissionDate, 'admissionDate', 10);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) throw new HttpsError('invalid-argument', 'داخلے کی تاریخ درست نہیں۔');
+    patch.admissionDate = date;
+  }
+  if (Object.keys(patch).length === 0) throw new HttpsError('invalid-argument', 'تبدیلی کے لیے کوئی درست فیلڈ نہیں دی گئی۔');
+  await ref.update({ ...patch, updatedAt: FieldValue.serverTimestamp(), updatedBy: actorUid });
+  await writeAudit(actorUid, 'student.updated', 'student', studentId);
+  return { studentId, updated: Object.keys(patch) };
+});
+
+export const correctAttendance = onCall({ region: REGION }, async (request) => {
+  const actorUid = requireAdmin(request);
+  const recordId = requiredString(request.data?.recordId, 'recordId', 256);
+  const status = request.data?.status;
+  const reason = requiredString(request.data?.reason, 'reason', 300);
+  if (!['present', 'absent', 'late', 'leave'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'حاضری کی حیثیت درست نہیں۔');
+  }
+  const ref = db.collection('attendance').doc(recordId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.madrasaId !== MADRASA_ID) {
+    throw new HttpsError('not-found', 'حاضری کا ریکارڈ نہیں ملا۔');
+  }
+  await ref.update({
+    status,
+    correctionReason: reason,
+    correctedBy: actorUid,
+    correctedAt: FieldValue.serverTimestamp(),
+  });
+  await writeAudit(actorUid, 'attendance.corrected', 'attendance', recordId);
+  return { recordId, status };
+});
+
+export const setProgressParentVisibility = onCall({ region: REGION }, async (request) => {
+  const actorUid = requireAdmin(request);
+  const recordId = requiredString(request.data?.recordId, 'recordId', 256);
+  const visible = request.data?.visible;
+  if (typeof visible !== 'boolean') throw new HttpsError('invalid-argument', 'Visibility must be true or false.');
+  const ref = db.collection('progress_logs').doc(recordId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.madrasaId !== MADRASA_ID) {
+    throw new HttpsError('not-found', 'تعلیمی پیش رفت کا ریکارڈ نہیں ملا۔');
+  }
+  await ref.update({
+    parentVisible: visible,
+    visibilityApprovedBy: actorUid,
+    visibilityApprovedAt: FieldValue.serverTimestamp(),
+  });
+  await writeAudit(actorUid, visible ? 'progress.shared_with_parent' : 'progress.hidden_from_parent', 'progress_log', recordId);
+  return { recordId, parentVisible: visible };
 });
