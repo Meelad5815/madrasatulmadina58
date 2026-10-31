@@ -90,8 +90,8 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
     finally { setBusy(false) }
   }
 
-  async function submitProgress(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setNotice(''); setError('')
+  async function submitProgress() {
+    setBusy(true); setNotice(''); setError('')
     try {
       await recordDailyProgress({ studentId: selectedStudent, date: progressForm.date, session: progressForm.session, sabaq: progressForm.sabaq, sabqi: progressForm.sabqi, manzil: progressForm.manzil })
       setNotice('روزانہ تعلیمی پیش رفت محفوظ ہو گئی۔ والدین کو دکھانے سے پہلے ایڈمن کی منظوری ضروری ہے۔')
@@ -130,7 +130,7 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
           <div className="form-actions"><button className="primary-btn" disabled={busy || !selectedStudent}>{busy ? 'محفوظ ہو رہا ہے…' : 'حاضری محفوظ کریں'}</button><button type="button" className="outline-btn" onClick={() => setShowProgressForm(false)}>بند کریں</button></div>
           <div className="form-divider" /><h3>سبق، سبقی اور منزل</h3>
           <div className="form-grid"><label>سبق<input value={progressForm.sabaq} onChange={e => setProgressForm(p => ({...p,sabaq:e.target.value}))} placeholder="مثلاً سورۃ البقرہ، آیات..." /></label><label>سبقی<input value={progressForm.sabqi} onChange={e => setProgressForm(p => ({...p,sabqi:e.target.value}))} /></label><label>منزل<input value={progressForm.manzil} onChange={e => setProgressForm(p => ({...p,manzil:e.target.value}))} /></label></div>
-          <button type="button" className="primary-btn" disabled={busy || !selectedStudent} onClick={async () => { const fakeEvent = { preventDefault() {} } as FormEvent<HTMLFormElement>; await submitProgress(fakeEvent) }}><ClipboardList size={16}/> پیش رفت محفوظ کریں</button>
+          <button type="button" className="primary-btn" disabled={busy || !selectedStudent} onClick={() => void submitProgress()}><ClipboardList size={16}/> پیش رفت محفوظ کریں</button>
         </form>}
         <div className="portal-note"><ShieldCheck size={18}/><p><strong>نجی معلومات محفوظ ہیں۔</strong><br/>سرپرست کے رابطے اور دیگر حساس معلومات الگ محفوظ رکھی جاتی ہیں۔ والدین کا تعلق صرف منتظم کی تصدیق کے بعد فعال ہوتا ہے۔</p></div>
       </div>
