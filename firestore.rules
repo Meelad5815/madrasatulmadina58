@@ -10,7 +10,10 @@ service cloud.firestore {
     function sameMadrasa(data) { return signedIn() && data.madrasaId == madrasaId(); }
     function assignmentId(studentId) { return request.auth.uid + '_' + studentId; }
     function assignedToQari(studentId) {
-      return exists(/databases/$(database)/documents/student_assignments/$(assignmentId(studentId)));
+      let assignmentPath = /databases/$(database)/documents/student_assignments/$(assignmentId(studentId));
+      return exists(assignmentPath)
+        && get(assignmentPath).data.qariUid == request.auth.uid
+        && get(assignmentPath).data.status == 'active';
     }
     function parentLinked(studentId) {
       let linkPath = /databases/$(database)/documents/student_parent_links/$(assignmentId(studentId));
