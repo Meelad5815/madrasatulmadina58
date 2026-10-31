@@ -107,6 +107,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "progress_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "madrasaId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibilityStatus",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
