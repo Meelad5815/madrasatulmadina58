@@ -41,32 +41,44 @@ Initial secure application foundation. Firebase project credentials, initial adm
 - Firestore and Storage rules deny private access by default. Sensitive writes are routed through server-side functions where implemented.
 - GitHub Actions build workflow for the frontend and Cloud Functions.
 
-## Configure Firebase (required before live use)
-1. Create or select the Firebase project that will own this Madrasa system.
+## Configure Firebase and Vercel (required before live use)
+1. Create or select a Firebase project.
 2. Enable Email/Password under Firebase Authentication.
 3. Create Firestore and Firebase Storage in the same project.
-4. Copy `.env.example` to `.env.local` and fill in the Firebase Web App configuration.
-5. Install Firebase CLI and authenticate with an authorized project administrator.
-6. Deploy the rules, indexes, functions and hosting configuration:
+4. Add the Firebase Web App configuration to Vercel Project Environment Variables:
+   - `VITE_FIREBASE_API_KEY`
+   - `VITE_FIREBASE_AUTH_DOMAIN`
+   - `VITE_FIREBASE_PROJECT_ID`
+   - `VITE_FIREBASE_STORAGE_BUCKET`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+   - `VITE_FIREBASE_APP_ID`
+5. Create a Firebase service account and add these server-only variables to Vercel:
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` (paste the complete JSON directly into Vercel; never commit it or send it in chat)
+   - `MRK_INITIAL_ADMIN_EMAIL` (the email of a user already created in Firebase Authentication)
+   - `MRK_ADMIN_BOOTSTRAP_SECRET` (a long random one-time secret)
+6. Deploy Firestore rules and indexes:
    ```bash
    firebase use YOUR_FIREBASE_PROJECT_ID
-   firebase deploy --only firestore:rules,firestore:indexes,storage,functions
-   npm install
-   npm run build
-   firebase deploy --only hosting
+   firebase deploy --only firestore:rules,firestore:indexes,storage
    ```
+7. Push to `main`; Vercel builds the public site and the authenticated serverless API from the same repository.
 
 ## One-time initial Admin bootstrap
-A first Admin cannot be created from the public website. Use a trusted machine with a Firebase service account or Application Default Credentials. Do not commit the credential file.
+After setting the four server-side Vercel variables above and deploying, call the one-time endpoint from a secure terminal:
 ```bash
-cd functions
-npm install
-export GOOGLE_APPLICATION_CREDENTIALS="/secure/path/service-account.json"
-export FIREBASE_PROJECT_ID="YOUR_FIREBASE_PROJECT_ID"
-export ADMIN_EMAIL="the-admin-email@example.com"
-npm run bootstrap:admin
+curl -X POST "https://YOUR-VERCEL-DOMAIN/api/madrasa" \
+  -H "Content-Type: application/json" \
+  -H "x-mrk-bootstrap-secret: YOUR_ONE_TIME_SECRET" \
+  -d '{"action":"bootstrapAdmin"}'
 ```
-After bootstrapping, the Admin must sign out and sign in again so the ID token receives the new custom claims. The system's fixed tenant claim is `mrk-madrasa-58`.
+The configured Firebase Auth user receives the Admin custom claims. Immediately remove `MRK_ADMIN_BOOTSTRAP_SECRET` and `MRK_INITIAL_ADMIN_EMAIL` from Vercel Environment Variables and redeploy. The bootstrap endpoint refuses to run again after successful initialization.
+
+## Backend architecture
+- Firebase Authentication, Firestore and Storage hold the identity, records and files.
+- Vercel serverless API routes use Firebase Admin SDK for privileged, validated operations. This avoids requiring Firebase Cloud Functions deployment and its billing-plan prerequisite.
+- The API verifies Firebase ID tokens and role claims on every protected request.
+- Firestore and Storage rules remain default-deny for private records. The API service account is stored only in Vercel server-side environment variables.
 
 ## Important limitations before production
 - Firebase project credentials and the first Admin identity have not been supplied or connected, so live authentication, data storage, rules deployment, Cloud Functions deployment, and Hosting deployment have not been verified.
