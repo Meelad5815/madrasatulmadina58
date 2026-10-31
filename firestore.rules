@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.role : null; }
+    function madrasaId() { return signedIn() ? request.auth.token.madrasaId : null; }
+    function isAdmin() { return signedIn() && role() == 'admin'; }
+    function isQari() { return signedIn() && role() == 'qari'; }
+    function isParent() { return signedIn() && role() == 'parent'; }
+    function sameMadrasa(data) { return signedIn() && data.madrasaId == madrasaId(); }
+    function assignedToQari(studentId) {
+      return exists(/databases/$(database)/documents/student_assignments/$(request.auth.uid + '_' + studentId));
+    }
+    function parentLinked(studentId) {
+      let link = get(/databases/$(database)/documents/student_parent_links/$(request.auth.uid + '_' + studentId));
+      return exists(/databases/$(database)/documents/student_parent_links/$(request.auth.uid + '_' + studentId))
+        && link.data.verified == true
+        && link.data.parentUid == request.auth.uid;
+    }
+
+    match /public_content/{docId} {
+      allow read: if resource.data.status == 'published' && resource.data.visibility == 'public';
+      allow create, update, delete: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /announcements/{docId} {
+      allow read: if (resource.data.status == 'published' && resource.data.audience == 'public')
+        || (signedIn() && sameMadrasa(resource.data) && resource.data.audience in ['parents', 'staff']);
+      allow write: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /students/{studentId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data)
+        || (isQari() && sameMadrasa(resource.data) && assignedToQari(studentId))
+        || (isParent() && sameMadrasa(resource.data) && parentLinked(studentId));
+      allow create, update, delete: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /teachers/{teacherId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data)
+        || (signedIn() && sameMadrasa(resource.data) && request.auth.uid == teacherId);
+      allow write: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /student_assignments/{assignmentId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.qariUid == request.auth.uid)
+        || (isParent() && parentLinked(resource.data.studentId));
+      allow write: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /student_parent_links/{linkId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.parentUid == request.auth.uid);
+      allow write: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /attendance/{recordId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data)
+        || (isQari() && sameMadrasa(resource.data) && assignedToQari(resource.data.studentId))
+        || (isParent() && sameMadrasa(resource.data) && parentLinked(resource.data.studentId));
+      allow create, update: if isAdmin() && sameMadrasa(request.resource.data)
+        || (isQari() && sameMadrasa(request.resource.data)
+          && assignedToQari(request.resource.data.studentId)
+          && request.resource.data.qariUid == request.auth.uid);
+      allow delete: if isAdmin() && sameMadrasa(resource.data);
+    }
+
+    match /progress_logs/{recordId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data)
+        || (isQari() && sameMadrasa(resource.data) && assignedToQari(resource.data.studentId))
+        || (isParent() && sameMadrasa(resource.data)
+          && resource.data.parentVisible == true && parentLinked(resource.data.studentId));
+      allow create, update: if isAdmin() && sameMadrasa(request.resource.data)
+        || (isQari() && sameMadrasa(request.resource.data)
+          && assignedToQari(request.resource.data.studentId)
+          && request.resource.data.qariUid == request.auth.uid);
+      allow delete: if isAdmin() && sameMadrasa(resource.data);
+    }
+
+    match /certificates/{certificateId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data)
+        || (isParent() && sameMadrasa(resource.data)
+          && resource.data.parentVisible == true && parentLinked(resource.data.studentId));
+      allow write: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data);
+      allow create: if signedIn() && sameMadrasa(request.resource.data)
+        && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
