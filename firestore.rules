@@ -15,16 +15,17 @@ service cloud.firestore {
         && get(assignmentPath).data.qariUid == request.auth.uid
         && get(assignmentPath).data.status == 'active';
     }
-    function canReadStudentRecord(data) {
-      return (isAdmin() && sameMadrasa(data))
-        || (isQari() && sameMadrasa(data) && assignedToQari(data.studentId))
-        || (isParent() && sameMadrasa(data) && parentLinked(data.studentId));
-    }
+
     function parentLinked(studentId) {
       let linkPath = /databases/$(database)/documents/student_parent_links/$(assignmentId(studentId));
       return exists(linkPath)
         && get(linkPath).data.verified == true
         && get(linkPath).data.parentUid == request.auth.uid;
+    }
+    function canReadStudentRecord(data) {
+      return (isAdmin() && sameMadrasa(data))
+        || (isQari() && sameMadrasa(data) && assignedToQari(data.studentId))
+        || (isParent() && sameMadrasa(data) && parentLinked(data.studentId));
     }
 
     match /public_content/{docId} {
