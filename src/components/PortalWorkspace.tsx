@@ -3,8 +3,7 @@ import {
   collection, doc, getDoc, getDocs, limit, query, where,
 } from 'firebase/firestore'
 import { BookOpen, CalendarCheck, CheckCircle2, ClipboardList, LoaderCircle, Plus, RefreshCw, ShieldCheck, Users } from 'lucide-react'
-import { signOut } from 'firebase/auth'
-import { auth, db } from '../lib/firebase'
+import { db } from '../lib/firebase'
 import { createStudent, recordAttendance, recordDailyProgress } from '../services/madrasa'
 
 type StudentRow = {
@@ -106,7 +105,7 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
     <main className="portal-page">
       <div className="portal-top">
         <a href="/" className="brand"><span className="brand-mark"><BookOpen size={23} /></span><span className="brand-copy"><strong>MRK Madrasa 58</strong><small>محفوظ انتظامی نظام</small></span></a>
-        <button className="outline-btn" onClick={async () => { if (auth) await signOut(auth); onLogout() }}>لاگ آؤٹ</button>
+        <button className="outline-btn" onClick={onLogout}>لاگ آؤٹ</button>
       </div>
       <div className="container portal-content">
         <div className="portal-welcome"><div><p className="eyebrow">MRK MADRASA MANAGEMENT SYSTEM 58</p><h1>{roleTitle}</h1><p className="muted">{session.user.email}</p></div><div className="portal-badge"><ShieldCheck size={18} /> محفوظ سیشن</div></div>
