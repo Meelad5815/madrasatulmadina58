@@ -9,24 +9,26 @@ service firebase.storage {
 
     match /public/{allPaths=**} {
       allow read: if true;
-      allow write: if isAdmin() && sameMadrasa()
-        && request.resource != null
+      allow create, update: if isAdmin() && sameMadrasa()
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if isAdmin() && sameMadrasa();
     }
 
     match /private/students/{studentId}/{fileName} {
-      allow read, write: if isAdmin() && sameMadrasa();
+      allow read: if isAdmin() && sameMadrasa();
       allow create, update: if isAdmin() && sameMadrasa()
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('(image/(jpeg|png|webp)|application/pdf)');
+      allow delete: if isAdmin() && sameMadrasa();
     }
 
     match /private/certificates/{studentId}/{fileName} {
-      allow read, write: if isAdmin() && sameMadrasa();
+      allow read: if isAdmin() && sameMadrasa();
       allow create, update: if isAdmin() && sameMadrasa()
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('(image/(jpeg|png|webp)|application/pdf)');
+      allow delete: if isAdmin() && sameMadrasa();
     }
 
     match /{allPaths=**} {
