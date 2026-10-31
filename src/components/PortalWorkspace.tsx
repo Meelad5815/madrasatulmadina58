@@ -4,7 +4,9 @@ import {
 } from 'firebase/firestore'
 import { BookOpen, CalendarCheck, CheckCircle2, ClipboardList, LoaderCircle, Plus, RefreshCw, ShieldCheck, Users } from 'lucide-react'
 import { db } from '../lib/firebase'
-import { createStudent, recordAttendance, recordDailyProgress } from '../services/madrasa'
+import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress } from '../services/madrasa'
+
+type AccountRow = { uid: string; displayName: string; email: string }
 
 type StudentRow = {
   id: string
@@ -31,6 +33,15 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
   const [notice, setNotice] = useState('')
   const [showStudentForm, setShowStudentForm] = useState(false)
   const [showProgressForm, setShowProgressForm] = useState(false)
+  const [qariAccounts, setQariAccounts] = useState<AccountRow[]>([])
+  const [parentAccounts, setParentAccounts] = useState<AccountRow[]>([])
+  const [showAccountForm, setShowAccountForm] = useState(false)
+  const [showAssignmentForm, setShowAssignmentForm] = useState(false)
+  const [showParentLinkForm, setShowParentLinkForm] = useState(false)
+  const [accountForm, setAccountForm] = useState({ displayName: '', email: '', role: 'qari' as 'qari' | 'parent' })
+  const [assignmentForm, setAssignmentForm] = useState({ studentId: '', qariUid: '' })
+  const [parentLinkForm, setParentLinkForm] = useState({ studentId: '', parentUid: '' })
+  const [temporaryPassword, setTemporaryPassword] = useState('')
   const [selectedStudent, setSelectedStudent] = useState('')
   const [studentForm, setStudentForm] = useState({ fullName: '', guardianName: '', guardianPhone: '', program: 'hifz' as 'hifz' | 'nazra' | 'qaida', admissionDate: pakistanDate() })
   const [progressForm, setProgressForm] = useState({ date: pakistanDate(), session: 'morning' as 'morning' | 'afternoon' | 'evening', status: 'present' as 'present' | 'absent' | 'late' | 'leave', sabaq: '', sabqi: '', manzil: '' })
@@ -42,8 +53,14 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
     try {
       let ids: string[] = []
       if (session.role === 'admin') {
-        const snap = await getDocs(query(collection(db, 'students'), where('madrasaId', '==', session.madrasaId), limit(100)))
+        const [snap, qariSnap, parentSnap] = await Promise.all([
+          getDocs(query(collection(db, 'students'), where('madrasaId', '==', session.madrasaId), limit(100))),
+          getDocs(query(collection(db, 'teachers'), where('madrasaId', '==', session.madrasaId), limit(100))),
+          getDocs(query(collection(db, 'parents'), where('madrasaId', '==', session.madrasaId), limit(100))),
+        ])
         setStudents(snap.docs.map(item => ({ id: item.id, ...(item.data() as Omit<StudentRow, 'id'>) })).sort((a,b) => b.admissionDate.localeCompare(a.admissionDate)))
+        setQariAccounts(qariSnap.docs.map(item => ({ uid: item.id, displayName: String(item.data().displayName ?? ''), email: String(item.data().email ?? '') })))
+        setParentAccounts(parentSnap.docs.map(item => ({ uid: item.id, displayName: String(item.data().displayName ?? ''), email: String(item.data().email ?? '') })))
         setLoading(false); return
       }
       if (session.role === 'qari') {
@@ -77,6 +94,39 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
       setShowStudentForm(false)
       await loadStudents()
     } catch (e) { setError(e instanceof Error ? e.message : 'طالب علم محفوظ نہیں ہو سکا۔') }
+    finally { setBusy(false) }
+  }
+
+  async function submitAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(''); setNotice(''); setTemporaryPassword('')
+    try {
+      const result = await createManagedAccount(accountForm)
+      setNotice(`${result.role === 'qari' ? 'قاری' : 'والدین'} کا اکاؤنٹ بنا دیا گیا: ${result.email}`)
+      setTemporaryPassword(result.temporaryPassword)
+      setAccountForm({ displayName: '', email: '', role: 'qari' })
+      setShowAccountForm(false)
+      await loadStudents()
+    } catch (e) { setError(e instanceof Error ? e.message : 'اکاؤنٹ نہیں بن سکا۔') }
+    finally { setBusy(false) }
+  }
+
+  async function submitAssignment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(''); setNotice('')
+    try {
+      await assignStudentToQari(assignmentForm)
+      setNotice('طالب علم قاری کو تفویض کر دیا گیا ہے۔ سابقہ فعال تفویض بند کر دی گئی ہے۔')
+      setShowAssignmentForm(false); setAssignmentForm({ studentId: '', qariUid: '' })
+    } catch (e) { setError(e instanceof Error ? e.message : 'قاری تفویض نہیں ہو سکا۔') }
+    finally { setBusy(false) }
+  }
+
+  async function submitParentLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(''); setNotice('')
+    try {
+      await verifyParentChildLink(parentLinkForm)
+      setNotice('والدین اور بچے کا تعلق تصدیق کرکے فعال کر دیا گیا ہے۔')
+      setShowParentLinkForm(false); setParentLinkForm({ studentId: '', parentUid: '' })
+    } catch (e) { setError(e instanceof Error ? e.message : 'والدین کا تعلق تصدیق نہیں ہو سکا۔') }
     finally { setBusy(false) }
   }
 
@@ -116,6 +166,31 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
           <div><h2>طلبہ کا ریکارڈ</h2><p>اس اکاؤنٹ کو اجازت یافتہ طلبہ کی فہرست</p></div>
           <button className="outline-btn" onClick={() => void loadStudents()}><RefreshCw size={15} /> تازہ کریں</button>
         </div>
+        {session.role === 'admin' && <div className="admin-actions">
+          <button className="outline-btn" onClick={() => setShowAccountForm(!showAccountForm)}><Plus size={15}/> قاری / والدین اکاؤنٹ</button>
+          <button className="outline-btn" onClick={() => setShowAssignmentForm(!showAssignmentForm)}>قاری تفویض کریں</button>
+          <button className="outline-btn" onClick={() => setShowParentLinkForm(!showParentLinkForm)}>والدین کا اکاؤنٹ لنک کریں</button>
+        </div>}
+        {temporaryPassword && <div className="success-notice password-notice"><span>عارضی پاس ورڈ (صرف ایک بار محفوظ کریں):</span><code dir="ltr">{temporaryPassword}</code><button type="button" className="small-action" onClick={() => void navigator.clipboard?.writeText(temporaryPassword)}>کاپی</button></div>}
+        {showAccountForm && session.role === 'admin' && <form className="workspace-form" onSubmit={submitAccount}>
+          <h3>نیا صارف اکاؤنٹ</h3><div className="form-grid">
+            <label>نام<input required value={accountForm.displayName} onChange={e => setAccountForm(p => ({...p,displayName:e.target.value}))}/></label>
+            <label>ای میل<input type="email" required dir="ltr" value={accountForm.email} onChange={e => setAccountForm(p => ({...p,email:e.target.value}))}/></label>
+            <label>کردار<select value={accountForm.role} onChange={e => setAccountForm(p => ({...p,role:e.target.value as 'qari'|'parent'}))}><option value="qari">قاری</option><option value="parent">والدین</option></select></label>
+          </div><div className="form-actions"><button className="primary-btn" disabled={busy}>اکاؤنٹ بنائیں</button><button type="button" className="outline-btn" onClick={() => setShowAccountForm(false)}>منسوخ</button></div>
+        </form>}
+        {showAssignmentForm && session.role === 'admin' && <form className="workspace-form" onSubmit={submitAssignment}>
+          <h3>طالب علم کو قاری کے سپرد کریں</h3><div className="form-grid">
+            <label>طالب علم<select required value={assignmentForm.studentId} onChange={e => setAssignmentForm(p => ({...p,studentId:e.target.value}))}><option value="">منتخب کریں</option>{students.map(s => <option key={s.id} value={s.id}>{s.fullName} — {s.studentCode}</option>)}</select></label>
+            <label>قاری<select required value={assignmentForm.qariUid} onChange={e => setAssignmentForm(p => ({...p,qariUid:e.target.value}))}><option value="">منتخب کریں</option>{qariAccounts.map(q => <option key={q.uid} value={q.uid}>{q.displayName} ({q.email})</option>)}</select></label>
+          </div><div className="form-actions"><button className="primary-btn" disabled={busy || !students.length || !qariAccounts.length}>تفویض محفوظ کریں</button><button type="button" className="outline-btn" onClick={() => setShowAssignmentForm(false)}>منسوخ</button></div>
+        </form>}
+        {showParentLinkForm && session.role === 'admin' && <form className="workspace-form" onSubmit={submitParentLink}>
+          <h3>والدین اور بچے کا تعلق تصدیق کریں</h3><div className="form-grid">
+            <label>طالب علم<select required value={parentLinkForm.studentId} onChange={e => setParentLinkForm(p => ({...p,studentId:e.target.value}))}><option value="">منتخب کریں</option>{students.map(s => <option key={s.id} value={s.id}>{s.fullName} — {s.studentCode}</option>)}</select></label>
+            <label>والدین کا اکاؤنٹ<select required value={parentLinkForm.parentUid} onChange={e => setParentLinkForm(p => ({...p,parentUid:e.target.value}))}><option value="">منتخب کریں</option>{parentAccounts.map(p => <option key={p.uid} value={p.uid}>{p.displayName} ({p.email})</option>)}</select></label>
+          </div><div className="form-actions"><button className="primary-btn" disabled={busy || !students.length || !parentAccounts.length}>تعلق تصدیق کریں</button><button type="button" className="outline-btn" onClick={() => setShowParentLinkForm(false)}>منسوخ</button></div>
+        </form>}
         {session.role === 'admin' && <button className="primary-btn workspace-action" onClick={() => setShowStudentForm(!showStudentForm)}><Plus size={17} /> نیا طالب علم شامل کریں</button>}
         {showStudentForm && session.role === 'admin' && <form className="workspace-form" onSubmit={submitStudent}>
           <h3>نئے طالب علم کا داخلہ</h3>
