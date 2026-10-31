@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b --pretty",
-    "lint": "tsc -b --pretty"
+    "lint": "tsc -b --pretty",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-mrk-madrasa \"vitest run tests/firestore.rules.test.ts\"",
+    "test:rules:unit": "vitest run tests/firestore.rules.test.ts"
   },
   "dependencies": {
     "firebase": "^12.5.0",
@@ -22,6 +24,9 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "~5.7.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase-tools": "^13.29.1",
+    "vitest": "^2.1.8"
   }
 }
