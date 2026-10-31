@@ -258,6 +258,7 @@ export const recordDailyProgress = onCall({ region: REGION }, async (request) =>
     manzil: typeof request.data?.manzil === 'string' ? request.data.manzil.trim().slice(0, 500) : '',
     quality: ['excellent', 'good', 'needs_attention'].includes(request.data?.quality) ? request.data.quality : 'good',
     parentVisible: caller.token.role === 'admin' && request.data?.parentVisible === true,
+    visibilityStatus: caller.token.role === 'admin' && request.data?.parentVisible === true ? 'approved' : 'pending',
     qariUid: caller.uid,
     createdBy: caller.uid,
     createdAt: FieldValue.serverTimestamp(),
@@ -338,6 +339,7 @@ export const setProgressParentVisibility = onCall({ region: REGION }, async (req
   }
   await ref.update({
     parentVisible: visible,
+    visibilityStatus: visible ? 'approved' : 'rejected',
     visibilityApprovedBy: actorUid,
     visibilityApprovedAt: FieldValue.serverTimestamp(),
   });
