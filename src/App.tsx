@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { auth, isFirebaseConfigured } from './lib/firebase'
 import type { UserRole } from './types'
+import PortalWorkspace from './components/PortalWorkspace'
 
 type Session = { user: User; role: UserRole | null; madrasaId: string | null }
 
@@ -106,24 +107,7 @@ function LoginPanel({ onBack, onSignedIn }: { onBack: () => void; onSignedIn: (s
 }
 
 function Portal({ session, onLogout }: { session: Session; onLogout: () => void }) {
-  const roleNames: Record<UserRole, string> = { admin: 'ایڈمن پورٹل', qari: 'قاری پورٹل', parent: 'والدین پورٹل' }
-  const roleItems = session.role === 'admin'
-    ? [{ icon: Users, title: 'طلبہ کا ریکارڈ', desc: 'داخلہ، پروفائل اور تعلیمی تاریخ' }, { icon: UserRound, title: 'قراء و اساتذہ', desc: 'اساتذہ کی معلومات اور ذمہ داریاں' }, { icon: CalendarCheck, title: 'حاضری کا نظام', desc: 'روزانہ اور ماہانہ حاضری' }, { icon: BookOpen, title: 'حفظ و ناظرہ', desc: 'تعلیمی پیش رفت اور تکمیل' }, { icon: FileCheck2, title: 'اسناد و رپورٹس', desc: 'محفوظ اسناد اور کارکردگی رپورٹس' }, { icon: Settings, title: 'نظام کی ترتیبات', desc: 'صارفین اور اجازتوں کا انتظام' }]
-    : session.role === 'qari'
-      ? [{ icon: Users, title: 'میرے طلبہ', desc: 'صرف آپ کو تفویض کردہ طلبہ' }, { icon: CalendarCheck, title: 'حاضری درج کریں', desc: 'اپنی کلاس کی حاضری' }, { icon: BookOpen, title: 'روزانہ سبق', desc: 'سبق، سبقی اور منزل' }, { icon: ChartNoAxesCombined, title: 'تعلیمی پیش رفت', desc: 'طلبہ کی کارکردگی کا جائزہ' }]
-      : [{ icon: Users, title: 'میرے بچے', desc: 'صرف تصدیق شدہ بچوں کا ریکارڈ' }, { icon: CalendarCheck, title: 'حاضری', desc: 'حاضری کی تفصیل' }, { icon: BookOpen, title: 'سبق اور کارکردگی', desc: 'منظور شدہ تعلیمی پیش رفت' }, { icon: Megaphone, title: 'اعلانات', desc: 'مدرسے کی اہم معلومات' }]
-
-  return (
-    <main className="portal-page">
-      <div className="portal-top"><a href="/" className="brand"><span className="brand-mark"><BookOpen size={23} /></span><span className="brand-copy"><strong>MRK Madrasa 58</strong><small>محفوظ انتظامی نظام</small></span></a><button className="outline-btn" onClick={onLogout}><LogOut size={16} /> لاگ آؤٹ</button></div>
-      <div className="container portal-content">
-        <div className="portal-welcome"><div><p className="eyebrow">MRK MADRASA MANAGEMENT SYSTEM 58</p><h1>{roleNames[session.role ?? 'parent']}</h1><p className="muted">السلام علیکم، {session.user.email}</p></div><div className="portal-badge"><ShieldCheck size={18} /> تصدیق شدہ سیشن</div></div>
-        <div className="secure-banner"><LockKeyhole size={19} /><span>آپ کو صرف اپنے کردار اور اجازت کے مطابق معلومات تک رسائی حاصل ہے۔</span></div>
-        <div className="portal-grid">{roleItems.map(item => <div className="portal-tile" key={item.title}><span className="tile-icon"><item.icon size={22} /></span><h3>{item.title}</h3><p>{item.desc}</p><span className="coming-label">اگلے مرحلے میں فعال ہوگا <ChevronLeft size={14} /></span></div>)}</div>
-        <div className="portal-note"><Clock3 size={18} /><p><strong>ڈیٹا ماڈیولز کی تیاری جاری ہے۔</strong><br />یہ ابتدائی محفوظ پورٹل فریم ورک ہے۔ طلبہ کا حقیقی ریکارڈ شامل کرنے سے پہلے Firebase ڈیٹا بیس، رولز اور ایڈمن اکاؤنٹ کی تصدیق مکمل کرنا ضروری ہے۔</p></div>
-      </div>
-    </main>
-  )
+  return <PortalWorkspace session={session} onLogout={onLogout} />
 }
 
 function HomePage({ onLogin }: { onLogin: () => void }) {
