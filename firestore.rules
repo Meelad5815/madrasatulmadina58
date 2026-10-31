@@ -107,12 +107,23 @@ service cloud.firestore {
 
 
     match /hifz_records/{recordId} {
-      allow read: if canReadStudentRecord(resource.data);
+      allow read: if (isAdmin() && sameMadrasa(resource.data))
+        || (isQari() && sameMadrasa(resource.data) && assignedToQari(resource.data.studentId))
+        || (isParent() && sameMadrasa(resource.data) && resource.data.parentVisible == true && parentLinked(resource.data.studentId));
       allow write: if false;
     }
 
     match /nazra_records/{recordId} {
-      allow read: if canReadStudentRecord(resource.data);
+      allow read: if (isAdmin() && sameMadrasa(resource.data))
+        || (isQari() && sameMadrasa(resource.data) && assignedToQari(resource.data.studentId))
+        || (isParent() && sameMadrasa(resource.data) && resource.data.parentVisible == true && parentLinked(resource.data.studentId));
+      allow write: if false;
+    }
+
+    match /course_progress_history/{recordId} {
+      allow read: if (isAdmin() && sameMadrasa(resource.data))
+        || (isQari() && sameMadrasa(resource.data) && assignedToQari(resource.data.studentId))
+        || (isParent() && sameMadrasa(resource.data) && resource.data.parentVisible == true && parentLinked(resource.data.studentId));
       allow write: if false;
     }
 
