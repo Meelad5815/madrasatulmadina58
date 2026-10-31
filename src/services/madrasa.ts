@@ -94,3 +94,7 @@ export function updateStudent(input: {
 }) {
   return call<typeof input, { studentId: string; updated: string[] }>('updateStudent', input)
 }
+
+export function setProgressParentVisibility(input: { recordId: string; visible: boolean }) {
+  return call<typeof input, { recordId: string; parentVisible: boolean }>('setProgressParentVisibility', input)
+}
