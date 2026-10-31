@@ -62,7 +62,7 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
           getDocs(query(collection(db, 'students'), where('madrasaId', '==', session.madrasaId), limit(100))),
           getDocs(query(collection(db, 'teachers'), where('madrasaId', '==', session.madrasaId), limit(100))),
           getDocs(query(collection(db, 'parents'), where('madrasaId', '==', session.madrasaId), limit(100))),
-          getDocs(query(collection(db, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('parentVisible', '==', false), limit(50))),
+          getDocs(query(collection(db, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('visibilityStatus', '==', 'pending'), limit(50))),
         ])
         const studentRows = snap.docs.map(item => ({ id: item.id, ...(item.data() as Omit<StudentRow, 'id'>) })).sort((a,b) => b.admissionDate.localeCompare(a.admissionDate))
         setStudents(studentRows)
