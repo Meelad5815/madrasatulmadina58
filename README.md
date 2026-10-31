@@ -1,51 +1,50 @@
 # MRK Madrasa Management System 58
 
-A secure, Urdu-first management platform for one local Madrasa-tul-Madina.
+A secure, Urdu-first digital management platform for one local Madrasa-tul-Madina.
 
 ## Product scope
 - Public information website
-- Admin management portal
+- Admin portal
 - Qari/teacher portal
 - Verified parent portal
 
 ## Technology
-React, TypeScript, Vite, Tailwind CSS, Firebase Authentication, Cloud Firestore, Firebase Storage, and Cloud Functions when required.
+- React 19, TypeScript, Vite
+- Responsive custom CSS with Urdu RTL and English LTR support
+- Firebase Authentication, Cloud Firestore and Firebase Storage
+- Vercel serverless API with Firebase Admin SDK for privileged operations
+- Node.js 22 for the Vercel application
+
+## Implemented foundation
+- Responsive Urdu public website with education programs, purpose, privacy section and contact placeholders.
+- Firebase email/password sign-in and custom-claim role detection.
+- Admin student admission form and student lifecycle status updates.
+- Admin Qari/Parent account creation, one-time temporary password display, Qari assignment and verified parent-child linking.
+- Qari portal for assigned students, attendance, daily sabaq/sabqi/manzil and Hifz/Nazra progress entry.
+- Parent portal for verified linked children and parent-approved attendance/progress summaries.
+- Admin review queue for Qari progress before it becomes visible to parents.
+- Vercel API verifies Firebase ID tokens and validates privileged actions server-side.
+- Firestore and Storage rules deny private access by default.
+- Firestore indexes and Firebase Emulator security-rule tests are included.
+- GitHub Actions workflow checks frontend build, Cloud Functions legacy package build and Firestore security rules tests.
 
 ## Privacy and safety
-Student and parent records are private by default. Public pages must only display content explicitly approved for public release. Parent-child links require administrator verification. Qaris may access only assigned students. Privileged roles must be granted through a trusted administrative process, never by client-side form input.
+Student and parent records are private by default. Public pages only display content explicitly approved for public release. Parent-child links require administrator verification. Qaris may access only actively assigned students. Role claims are issued by a trusted server-side bootstrap process, never by a public registration form. Do not enter real student information until Firebase configuration and security-rule tests are complete.
 
-## Setup
-1. Install Node.js 20 or later.
+## Local development
+1. Use Node.js 22.
 2. Run `npm install`.
-3. Copy `.env.example` to `.env.local` and fill in Firebase web configuration.
+3. Copy `.env.example` to `.env.local` and fill in the Firebase Web App values.
 4. Run `npm run dev`.
-5. Run `npm run build` before deployment.
+5. Run `npm run typecheck` and `npm run build`.
 
-Do not add Firebase service-account keys to frontend environment variables or commit secrets.
+Do not commit Firebase service-account credentials. Do not put server secrets in variables prefixed with `VITE_`.
 
-## Firebase deployment
-Review `firestore.rules`, `storage.rules`, and `firestore.indexes.json` before deploying. The initial admin must be bootstrapped through a trusted process. Never enable public writes or broad public reads of student records.
-
-## Status
-Initial secure application foundation. Firebase project credentials, initial admin identity, and production hosting still require owner-side configuration.
-
-
-## Current implementation
-- Urdu-first RTL public landing website and responsive navigation.
-- Firebase email/password sign-in with custom-claim role checks.
-- Role-scoped portal shell for Admin, Qari, and Parents.
-- Admin student admission form backed by a callable Cloud Function.
-- Qari student list, attendance recording, and daily progress recording through validated callable functions.
-- Parent portal reads only verified linked student profiles.
-- Trusted Cloud Functions for creating Qari/Parent accounts, assigning a student to a Qari, verifying parent-child links, recording attendance/progress, correcting attendance, and approving parent-visible progress.
-- Firestore and Storage rules deny private access by default. Sensitive writes are routed through server-side functions where implemented.
-- GitHub Actions build workflow for the frontend and Cloud Functions.
-
-## Configure Firebase and Vercel (required before live use)
+## Configure Firebase and Vercel
 1. Create or select a Firebase project.
-2. Enable Email/Password under Firebase Authentication.
+2. Enable Email/Password in Firebase Authentication.
 3. Create Firestore and Firebase Storage in the same project.
-4. Add the Firebase Web App configuration to Vercel Project Environment Variables:
+4. Add the Firebase Web App configuration to Vercel Environment Variables:
    - `VITE_FIREBASE_API_KEY`
    - `VITE_FIREBASE_AUTH_DOMAIN`
    - `VITE_FIREBASE_PROJECT_ID`
@@ -54,34 +53,37 @@ Initial secure application foundation. Firebase project credentials, initial adm
    - `VITE_FIREBASE_APP_ID`
 5. Create a Firebase service account and add these server-only variables to Vercel:
    - `FIREBASE_PROJECT_ID`
-   - `FIREBASE_SERVICE_ACCOUNT_JSON` (paste the complete JSON directly into Vercel; never commit it or send it in chat)
-   - `MRK_INITIAL_ADMIN_EMAIL` (the email of a user already created in Firebase Authentication)
-   - `MRK_ADMIN_BOOTSTRAP_SECRET` (a long random one-time secret)
-6. Deploy Firestore rules and indexes:
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` — paste the full JSON directly into Vercel; never commit it or send it in chat.
+   - `MRK_INITIAL_ADMIN_EMAIL` — an email address already registered in Firebase Authentication.
+   - `MRK_ADMIN_BOOTSTRAP_SECRET` — a long, random one-time secret.
+6. Deploy Firestore rules, indexes and Storage rules:
    ```bash
    firebase use YOUR_FIREBASE_PROJECT_ID
    firebase deploy --only firestore:rules,firestore:indexes,storage
    ```
-7. Push to `main`; Vercel builds the public site and the authenticated serverless API from the same repository.
+7. Push to `main`. Vercel builds the public website and authenticated serverless API from this repository.
 
-## One-time initial Admin bootstrap
-After setting the four server-side Vercel variables above and deploying, call the one-time endpoint from a secure terminal:
+## One-time Admin bootstrap
+After configuring the four server-only Vercel variables, call the bootstrap endpoint from a secure terminal:
 ```bash
 curl -X POST "https://YOUR-VERCEL-DOMAIN/api/madrasa" \
   -H "Content-Type: application/json" \
   -H "x-mrk-bootstrap-secret: YOUR_ONE_TIME_SECRET" \
   -d '{"action":"bootstrapAdmin"}'
 ```
-The configured Firebase Auth user receives the Admin custom claims. Immediately remove `MRK_ADMIN_BOOTSTRAP_SECRET` and `MRK_INITIAL_ADMIN_EMAIL` from Vercel Environment Variables and redeploy. The bootstrap endpoint refuses to run again after successful initialization.
+The configured Firebase Auth user receives the Admin custom claims. Immediately remove `MRK_ADMIN_BOOTSTRAP_SECRET` and `MRK_INITIAL_ADMIN_EMAIL` from Vercel Environment Variables and redeploy. The endpoint refuses to run again after successful initialization.
 
 ## Backend architecture
-- Firebase Authentication, Firestore and Storage hold the identity, records and files.
-- Vercel serverless API routes use Firebase Admin SDK for privileged, validated operations. This avoids requiring Firebase Cloud Functions deployment and its billing-plan prerequisite.
-- The API verifies Firebase ID tokens and role claims on every protected request.
-- Firestore and Storage rules remain default-deny for private records. The API service account is stored only in Vercel server-side environment variables.
+Firebase Authentication, Firestore and Storage hold identity, records and files. Vercel serverless API routes use Firebase Admin SDK for validated privileged operations, avoiding the Firebase Cloud Functions billing-plan prerequisite. The API verifies Firebase ID tokens and role claims on each protected request. The service-account JSON is only read by server-side code.
 
-## Important limitations before production
-- Firebase project credentials and the first Admin identity have not been supplied or connected, so live authentication, data storage, rules deployment, Cloud Functions deployment, and Hosting deployment have not been verified.
-- Parent account creation and verified child linking are implemented server-side; the complete Admin user-management interface is still in progress.
-- Hifz/Nazra history, examination reports, certificate uploads/downloads, activity moderation, construction updates, and parent progress-history screens still need their full user interfaces and end-to-end tests.
-- Run the GitHub Actions build and Firebase Emulator security tests before entering real student information.
+## Deployment
+- GitHub repository: https://github.com/Meelad5815/madrasatulmadina58
+- Vercel project: `mrk-madrasa-management-system-58`
+- Public deployment domain: https://mrk-madrasa-management-system-58.vercel.app
+
+## Remaining work before real production records
+- Firebase Web App configuration and server-side service account have not yet been connected.
+- Initial Admin bootstrap has not been run.
+- The current UI covers core student, account, assignment, attendance and daily progress workflows; complete Hifz/Nazra examination history, certificates and QR verification, full report exports, activity/gallery moderation, construction management, password-change flow and complete profile editing still require implementation.
+- Parent and Qari flows need end-to-end tests against a configured Firebase project.
+- Run the GitHub Actions build and Firebase Emulator security-rule tests before entering real student information.
