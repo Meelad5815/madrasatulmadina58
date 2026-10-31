@@ -7,6 +7,7 @@ import { db } from '../lib/firebase'
 import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress } from '../services/madrasa'
 
 type AccountRow = { uid: string; displayName: string; email: string }
+type ParentUpdate = { id: string; studentName: string; date: string; title: string; detail: string }
 
 type StudentRow = {
   id: string
@@ -28,6 +29,7 @@ function pakistanDate() {
 
 export default function PortalWorkspace({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const [students, setStudents] = useState<StudentRow[]>([])
+  const [parentUpdates, setParentUpdates] = useState<ParentUpdate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -77,7 +79,27 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
         if (data.madrasaId !== session.madrasaId) return null
         return { id: snap.id, studentCode: String(data.studentCode ?? ''), fullName: String(data.fullName ?? ''), program: data.program === 'nazra' || data.program === 'qaida' ? data.program : 'hifz', status: String(data.status ?? 'active'), admissionDate: String(data.admissionDate ?? '') } as StudentRow
       }))
-      setStudents(rows.filter((row): row is StudentRow => row !== null))
+      const validRows = rows.filter((row): row is StudentRow => row !== null)
+      setStudents(validRows)
+      if (session.role === 'parent') {
+        const history = await Promise.all(validRows.map(async (student) => {
+          const [attendanceSnap, progressSnap] = await Promise.all([
+            getDocs(query(collection(db, 'attendance'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), limit(10))),
+            getDocs(query(collection(db, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), where('parentVisible', '==', true), limit(10))),
+          ])
+          const attendanceItems = attendanceSnap.docs.map(item => {
+            const data = item.data()
+            return { id: item.id, studentName: student.fullName, date: String(data.date ?? ''), title: 'حاضری', detail: data.status === 'present' ? 'حاضر' : data.status === 'absent' ? 'غیر حاضر' : data.status === 'late' ? 'تاخیر' : 'چھٹی' }
+          })
+          const progressItems = progressSnap.docs.map(item => {
+            const data = item.data()
+            const detail = [data.sabaq ? `سبق: ${data.sabaq}` : '', data.sabqi ? `سبقی: ${data.sabqi}` : '', data.manzil ? `منزل: ${data.manzil}` : ''].filter(Boolean).join(' • ')
+            return { id: item.id, studentName: student.fullName, date: String(data.date ?? ''), title: 'تعلیمی پیش رفت', detail: detail || 'استاد نے پیش رفت درج کی ہے۔' }
+          })
+          return [...attendanceItems, ...progressItems]
+        }))
+        setParentUpdates(history.flat().sort((a,b) => b.date.localeCompare(a.date)).slice(0,30))
+      }
     } catch {
       setError('ریکارڈ لوڈ نہیں ہو سکا۔ براہِ کرم اجازتوں اور Firebase کنفیگریشن کو چیک کریں۔')
     } finally { setLoading(false) }
@@ -206,6 +228,10 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
           <div className="form-grid"><label>سبق<input value={progressForm.sabaq} onChange={e => setProgressForm(p => ({...p,sabaq:e.target.value}))} placeholder="مثلاً سورۃ البقرہ، آیات..." /></label><label>سبقی<input value={progressForm.sabqi} onChange={e => setProgressForm(p => ({...p,sabqi:e.target.value}))} /></label><label>منزل<input value={progressForm.manzil} onChange={e => setProgressForm(p => ({...p,manzil:e.target.value}))} /></label></div>
           <button type="button" className="primary-btn" disabled={busy || !selectedStudent} onClick={() => void submitProgress()}><ClipboardList size={16}/> پیش رفت محفوظ کریں</button>
         </form>}
+        {session.role === 'parent' && <section className="parent-history">
+          <div className="workspace-toolbar"><div><h2>بچوں کی تازہ کارکردگی</h2><p>صرف استاد یا انتظامیہ کی جانب سے والدین کے لیے منظور شدہ معلومات</p></div></div>
+          {parentUpdates.length === 0 ? <div className="empty-panel"><ClipboardList size={28}/><p>ابھی کوئی تازہ حاضری یا منظور شدہ تعلیمی پیش رفت موجود نہیں۔</p></div> : <div className="updates-list">{parentUpdates.map(item => <article className="update-item" key={item.id}><div><strong>{item.studentName}</strong><span>{item.title}</span></div><p>{item.detail}</p><time dir="ltr">{item.date}</time></article>)}</div>}
+        </section>}
         <div className="portal-note"><ShieldCheck size={18}/><p><strong>نجی معلومات محفوظ ہیں۔</strong><br/>سرپرست کے رابطے اور دیگر حساس معلومات الگ محفوظ رکھی جاتی ہیں۔ والدین کا تعلق صرف منتظم کی تصدیق کے بعد فعال ہوتا ہے۔</p></div>
       </div>
     </main>
