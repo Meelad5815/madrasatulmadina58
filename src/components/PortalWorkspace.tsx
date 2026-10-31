@@ -91,9 +91,11 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
       setStudents(validRows)
       if (session.role === 'parent') {
         const history = await Promise.all(validRows.map(async (student) => {
-          const [attendanceSnap, progressSnap] = await Promise.all([
+          const [attendanceSnap, progressSnap, hifzSnap, nazraSnap] = await Promise.all([
             getDocs(query(collection(firestore, 'attendance'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), limit(10))),
             getDocs(query(collection(firestore, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), where('parentVisible', '==', true), limit(10))),
+            getDoc(doc(firestore, 'hifz_records', student.id)),
+            getDoc(doc(firestore, 'nazra_records', student.id)),
           ])
           const attendanceItems = attendanceSnap.docs.map(item => {
             const data = item.data()
@@ -104,7 +106,16 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
             const detail = [data.sabaq ? `سبق: ${data.sabaq}` : '', data.sabqi ? `سبقی: ${data.sabqi}` : '', data.manzil ? `منزل: ${data.manzil}` : ''].filter(Boolean).join(' • ')
             return { id: item.id, studentName: student.fullName, date: String(data.date ?? ''), title: 'تعلیمی پیش رفت', detail: detail || 'استاد نے پیش رفت درج کی ہے۔' }
           })
-          return [...attendanceItems, ...progressItems]
+          const courseItems: ParentUpdate[] = []
+          if (hifzSnap.exists() && hifzSnap.data().parentVisible === true) {
+            const data = hifzSnap.data()
+            courseItems.push({ id: hifzSnap.id, studentName: student.fullName, date: String(data.updatedAt?.toDate?.().toISOString?.().slice(0,10) ?? ''), title: 'حفظ کی پیش رفت', detail: `${Number(data.completedParas ?? 0)} / 30 پارے مکمل • موجودہ پارہ: ${Number(data.currentPara ?? 1)}` })
+          }
+          if (nazraSnap.exists() && nazraSnap.data().parentVisible === true) {
+            const data = nazraSnap.data()
+            courseItems.push({ id: nazraSnap.id, studentName: student.fullName, date: String(data.updatedAt?.toDate?.().toISOString?.().slice(0,10) ?? ''), title: 'ناظرہ کی پیش رفت', detail: `${Number(data.completedParas ?? 0)} پارے مکمل • موجودہ پارہ: ${Number(data.currentPara ?? 1)}` })
+          }
+          return [...attendanceItems, ...progressItems, ...courseItems]
         }))
         setParentUpdates(history.flat().sort((a,b) => b.date.localeCompare(a.date)).slice(0,30))
       }
