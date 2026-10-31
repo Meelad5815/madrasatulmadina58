@@ -84,3 +84,13 @@ export function recordCourseProgress(input: {
 }) {
   return call<typeof input, { studentId: string; program: string; completedParas: number; currentPara: number }>('recordCourseProgress', input)
 }
+
+export function updateStudent(input: {
+  studentId: string
+  fullName?: string
+  program?: 'hifz' | 'nazra' | 'qaida'
+  status?: 'active' | 'inactive' | 'transferred' | 'completed'
+  admissionDate?: string
+}) {
+  return call<typeof input, { studentId: string; updated: string[] }>('updateStudent', input)
+}
