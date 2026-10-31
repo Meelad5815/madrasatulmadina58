@@ -54,15 +54,16 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
 
   const loadStudents = useCallback(async () => {
     if (!db || !session.madrasaId) { setError('Firebase ڈیٹا بیس کنفیگر نہیں ہے۔'); setLoading(false); return }
+    const firestore = db
     setLoading(true); setError('')
     try {
       let ids: string[] = []
       if (session.role === 'admin') {
         const [snap, qariSnap, parentSnap, progressSnap] = await Promise.all([
-          getDocs(query(collection(db, 'students'), where('madrasaId', '==', session.madrasaId), limit(100))),
-          getDocs(query(collection(db, 'teachers'), where('madrasaId', '==', session.madrasaId), limit(100))),
-          getDocs(query(collection(db, 'parents'), where('madrasaId', '==', session.madrasaId), limit(100))),
-          getDocs(query(collection(db, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('visibilityStatus', '==', 'pending'), limit(50))),
+          getDocs(query(collection(firestore, 'students'), where('madrasaId', '==', session.madrasaId), limit(100))),
+          getDocs(query(collection(firestore, 'teachers'), where('madrasaId', '==', session.madrasaId), limit(100))),
+          getDocs(query(collection(firestore, 'parents'), where('madrasaId', '==', session.madrasaId), limit(100))),
+          getDocs(query(collection(firestore, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('visibilityStatus', '==', 'pending'), limit(50))),
         ])
         const studentRows = snap.docs.map(item => ({ id: item.id, ...(item.data() as Omit<StudentRow, 'id'>) })).sort((a,b) => b.admissionDate.localeCompare(a.admissionDate))
         setStudents(studentRows)
@@ -73,14 +74,14 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
         setLoading(false); return
       }
       if (session.role === 'qari') {
-        const assignments = await getDocs(query(collection(db, 'student_assignments'), where('madrasaId', '==', session.madrasaId), where('qariUid', '==', session.user.uid), where('status', '==', 'active'), limit(100)))
+        const assignments = await getDocs(query(collection(firestore, 'student_assignments'), where('madrasaId', '==', session.madrasaId), where('qariUid', '==', session.user.uid), where('status', '==', 'active'), limit(100)))
         ids = assignments.docs.map(item => String(item.data().studentId))
       } else if (session.role === 'parent') {
-        const links = await getDocs(query(collection(db, 'student_parent_links'), where('madrasaId', '==', session.madrasaId), where('parentUid', '==', session.user.uid), where('verified', '==', true), limit(30)))
+        const links = await getDocs(query(collection(firestore, 'student_parent_links'), where('madrasaId', '==', session.madrasaId), where('parentUid', '==', session.user.uid), where('verified', '==', true), limit(30)))
         ids = links.docs.map(item => String(item.data().studentId))
       }
       const rows = await Promise.all(ids.map(async id => {
-        const snap = await getDoc(doc(db, 'students', id))
+        const snap = await getDoc(doc(firestore, 'students', id))
         if (!snap.exists()) return null
         const data = snap.data()
         if (data.madrasaId !== session.madrasaId) return null
@@ -91,8 +92,8 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
       if (session.role === 'parent') {
         const history = await Promise.all(validRows.map(async (student) => {
           const [attendanceSnap, progressSnap] = await Promise.all([
-            getDocs(query(collection(db, 'attendance'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), limit(10))),
-            getDocs(query(collection(db, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), where('parentVisible', '==', true), limit(10))),
+            getDocs(query(collection(firestore, 'attendance'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), limit(10))),
+            getDocs(query(collection(firestore, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('studentId', '==', student.id), where('parentVisible', '==', true), limit(10))),
           ])
           const attendanceItems = attendanceSnap.docs.map(item => {
             const data = item.data()
