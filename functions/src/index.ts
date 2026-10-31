@@ -122,3 +122,141 @@ export const verifyParentChildLink = onCall({ region: REGION }, async (request) 
   await writeAudit(actorUid, 'parent_child.verified', 'student_parent_link', linkId);
   return { linkId, verified: true };
 });
+
+
+export const createStudent = onCall({ region: REGION }, async (request) => {
+  const actorUid = requireAdmin(request);
+  const fullName = requiredString(request.data?.fullName, 'fullName', 120);
+  const guardianName = requiredString(request.data?.guardianName, 'guardianName', 120);
+  const program = request.data?.program;
+  const admissionDate = requiredString(request.data?.admissionDate, 'admissionDate', 10);
+  if (!['hifz', 'nazra', 'qaida'].includes(program)) {
+    throw new HttpsError('invalid-argument', 'تعلیمی شعبہ منتخب کریں۔');
+  }
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(admissionDate)) {
+    throw new HttpsError('invalid-argument', 'داخلے کی تاریخ درست درج کریں۔');
+  }
+  const studentRef = db.collection('students').doc();
+  const studentCode = `MRK58-${randomUUID().slice(0, 8).toUpperCase()}`;
+  await db.runTransaction(async (tx) => {
+    tx.create(studentRef, {
+      madrasaId: MADRASA_ID,
+      studentCode,
+      fullName,
+      program,
+      status: 'active',
+      admissionDate,
+      assignedTeacherIds: [],
+      createdAt: FieldValue.serverTimestamp(),
+      createdBy: actorUid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.create(db.collection('student_private').doc(studentRef.id), {
+      madrasaId: MADRASA_ID,
+      studentId: studentRef.id,
+      guardianName,
+      guardianPhone: typeof request.data?.guardianPhone === 'string' ? request.data.guardianPhone.trim().slice(0, 30) : '',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  await writeAudit(actorUid, 'student.created', 'student', studentRef.id);
+  return { studentId: studentRef.id, studentCode };
+});
+
+export const recordAttendance = onCall({ region: REGION }, async (request) => {
+  const caller = request.auth;
+  if (!caller || caller.token.madrasaId !== MADRASA_ID
+    || !['admin', 'qari'].includes(String(caller.token.role))) {
+    throw new HttpsError('permission-denied', 'حاضری درج کرنے کی اجازت نہیں۔');
+  }
+  const studentId = requiredString(request.data?.studentId, 'studentId', 128);
+  const date = requiredString(request.data?.date, 'date', 10);
+  const session = requiredString(request.data?.session ?? 'morning', 'session', 30);
+  const status = request.data?.status;
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)
+    || !['morning', 'afternoon', 'evening'].includes(session)
+    || !['present', 'absent', 'late', 'leave'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'حاضری کی تاریخ، وقت یا حیثیت درست نہیں۔');
+  }
+  const studentSnap = await db.collection('students').doc(studentId).get();
+  if (!studentSnap.exists || studentSnap.data()?.madrasaId !== MADRASA_ID
+    || studentSnap.data()?.status !== 'active') {
+    throw new HttpsError('not-found', 'فعال طالب علم کا ریکارڈ نہیں ملا۔');
+  }
+  if (caller.token.role === 'qari') {
+    const assignment = await db.collection('student_assignments').doc(`${caller.uid}_${studentId}`).get();
+    if (!assignment.exists || assignment.data()?.status !== 'active') {
+      throw new HttpsError('permission-denied', 'یہ طالب علم آپ کے سپرد نہیں ہے۔');
+    }
+  }
+  const recordId = `${studentId}_${date}_${session}`;
+  const ref = db.collection('attendance').doc(recordId);
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.exists) {
+      throw new HttpsError('already-exists', 'اس طالب علم کی اس تاریخ اور نشست کی حاضری پہلے درج ہو چکی ہے۔');
+    }
+    tx.create(ref, {
+      madrasaId: MADRASA_ID,
+      studentId,
+      date,
+      session,
+      status,
+      qariUid: caller.uid,
+      createdBy: caller.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  await writeAudit(caller.uid, 'attendance.recorded', 'attendance', recordId);
+  return { recordId, status };
+});
+
+export const recordDailyProgress = onCall({ region: REGION }, async (request) => {
+  const caller = request.auth;
+  if (!caller || caller.token.madrasaId !== MADRASA_ID
+    || !['admin', 'qari'].includes(String(caller.token.role))) {
+    throw new HttpsError('permission-denied', 'تعلیمی پیش رفت درج کرنے کی اجازت نہیں۔');
+  }
+  const studentId = requiredString(request.data?.studentId, 'studentId', 128);
+  const date = requiredString(request.data?.date, 'date', 10);
+  const session = requiredString(request.data?.session ?? 'morning', 'session', 30);
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+    throw new HttpsError('invalid-argument', 'تاریخ درست درج کریں۔');
+  }
+  const studentSnap = await db.collection('students').doc(studentId).get();
+  if (!studentSnap.exists || studentSnap.data()?.madrasaId !== MADRASA_ID) {
+    throw new HttpsError('not-found', 'طالب علم کا ریکارڈ نہیں ملا۔');
+  }
+  if (caller.token.role === 'qari') {
+    const assignment = await db.collection('student_assignments').doc(`${caller.uid}_${studentId}`).get();
+    if (!assignment.exists || assignment.data()?.status !== 'active') {
+      throw new HttpsError('permission-denied', 'یہ طالب علم آپ کے سپرد نہیں ہے۔');
+    }
+  }
+  const recordId = `${studentId}_${date}_${session}`;
+  const ref = db.collection('progress_logs').doc(recordId);
+  const progress = {
+    madrasaId: MADRASA_ID,
+    studentId,
+    date,
+    session,
+    sabaq: typeof request.data?.sabaq === 'string' ? request.data.sabaq.trim().slice(0, 500) : '',
+    sabqi: typeof request.data?.sabqi === 'string' ? request.data.sabqi.trim().slice(0, 500) : '',
+    manzil: typeof request.data?.manzil === 'string' ? request.data.manzil.trim().slice(0, 500) : '',
+    quality: ['excellent', 'good', 'needs_attention'].includes(request.data?.quality) ? request.data.quality : 'good',
+    parentVisible: caller.token.role === 'admin' && request.data?.parentVisible === true,
+    qariUid: caller.uid,
+    createdBy: caller.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.exists) {
+      throw new HttpsError('already-exists', 'اس تاریخ اور نشست کی پیش رفت پہلے درج ہو چکی ہے۔');
+    }
+    tx.create(ref, progress);
+  });
+  await writeAudit(caller.uid, 'progress.recorded', 'progress_log', recordId);
+  return { recordId };
+});
