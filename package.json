@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b --pretty",
     "lint": "tsc -b --pretty",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-mrk-madrasa \"vitest run tests/firestore.rules.test.ts\"",
+    "test:rules": "npx --yes firebase-tools@latest emulators:exec --only firestore --project demo-mrk-madrasa \"npm run test:rules:unit\"",
     "test:rules:unit": "vitest run tests/firestore.rules.test.ts"
   },
   "dependencies": {
@@ -26,7 +26,6 @@
     "typescript": "~5.7.2",
     "vite": "^6.0.5",
     "@firebase/rules-unit-testing": "^4.0.1",
-    "firebase-tools": "^13.29.1",
     "vitest": "^2.1.8"
   }
 }
