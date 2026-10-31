@@ -15,6 +15,11 @@ service cloud.firestore {
         && get(assignmentPath).data.qariUid == request.auth.uid
         && get(assignmentPath).data.status == 'active';
     }
+    function canReadStudentRecord(data) {
+      return (isAdmin() && sameMadrasa(data))
+        || (isQari() && sameMadrasa(data) && assignedToQari(data.studentId))
+        || (isParent() && sameMadrasa(data) && parentLinked(data.studentId));
+    }
     function parentLinked(studentId) {
       let linkPath = /databases/$(database)/documents/student_parent_links/$(assignmentId(studentId));
       return exists(linkPath)
@@ -31,7 +36,8 @@ service cloud.firestore {
     match /announcements/{docId} {
       allow read: if (resource.data.status == 'published' && resource.data.audience == 'public')
         || (isAdmin() && sameMadrasa(resource.data))
-        || (signedIn() && sameMadrasa(resource.data) && resource.data.audience in ['parents', 'staff']);
+        || (isParent() && sameMadrasa(resource.data) && resource.data.audience == 'parents')
+        || (isQari() && sameMadrasa(resource.data) && resource.data.audience == 'staff');
       allow create, update: if isAdmin() && sameMadrasa(request.resource.data);
       allow delete: if isAdmin() && sameMadrasa(resource.data);
     }
@@ -90,6 +96,57 @@ service cloud.firestore {
           && resource.data.parentVisible == true && parentLinked(resource.data.studentId));
       allow create, update: if isAdmin() && sameMadrasa(request.resource.data);
       allow delete: if isAdmin() && sameMadrasa(resource.data);
+    }
+
+
+    match /hifz_records/{recordId} {
+      allow read: if canReadStudentRecord(resource.data);
+      allow write: if false;
+    }
+
+    match /nazra_records/{recordId} {
+      allow read: if canReadStudentRecord(resource.data);
+      allow write: if false;
+    }
+
+    match /exam_results/{recordId} {
+      allow read: if (isAdmin() && sameMadrasa(resource.data))
+        || (isQari() && sameMadrasa(resource.data) && assignedToQari(resource.data.studentId))
+        || (isParent() && sameMadrasa(resource.data)
+          && resource.data.parentVisible == true && parentLinked(resource.data.studentId));
+      allow write: if false;
+    }
+
+    match /examinations/{examId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data);
+      allow write: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /admissions/{admissionId} {
+      allow read: if isAdmin() && sameMadrasa(resource.data);
+      allow write: if isAdmin() && sameMadrasa(request.resource.data);
+    }
+
+    match /activities/{activityId} {
+      allow read: if resource.data.status == 'published' && resource.data.visibility == 'public';
+      allow create, update: if isAdmin() && sameMadrasa(request.resource.data);
+      allow delete: if isAdmin() && sameMadrasa(resource.data);
+    }
+
+    match /construction_updates/{updateId} {
+      allow read: if resource.data.status == 'published' && resource.data.visibility == 'public';
+      allow create, update: if isAdmin() && sameMadrasa(request.resource.data);
+      allow delete: if isAdmin() && sameMadrasa(resource.data);
+    }
+
+    match /public_gallery/{imageId} {
+      allow read: if resource.data.status == 'published' && resource.data.visibility == 'public';
+      allow create, update: if isAdmin() && sameMadrasa(request.resource.data);
+      allow delete: if isAdmin() && sameMadrasa(resource.data);
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if isAdmin() && sameMadrasa(resource.data);
     }
 
     // Audit records are written only by trusted server-side functions.
