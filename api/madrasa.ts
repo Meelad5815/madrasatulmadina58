@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { randomUUID } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { FieldValue, getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore'
 
 const MADRASA_ID = 'mrk-madrasa-58'
 
@@ -38,7 +38,7 @@ function validateDate(value: unknown, field: string): string {
   return date
 }
 
-async function audit(db: FirebaseFirestore.Firestore, actorUid: string, action: string, recordType: string, recordId: string) {
+async function audit(db: Firestore, actorUid: string, action: string, recordType: string, recordId: string) {
   await db.collection('audit_logs').add({
     madrasaId: MADRASA_ID,
     actorUid,
