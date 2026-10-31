@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore'
 import { BookOpen, CalendarCheck, CheckCircle2, ClipboardList, LoaderCircle, Plus, RefreshCw, ShieldCheck, Users } from 'lucide-react'
 import { db } from '../lib/firebase'
-import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress, recordCourseProgress } from '../services/madrasa'
+import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress, recordCourseProgress, updateStudent } from '../services/madrasa'
 
 type AccountRow = { uid: string; displayName: string; email: string }
 type ParentUpdate = { id: string; studentName: string; date: string; title: string; detail: string }
@@ -117,6 +117,16 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
       setShowStudentForm(false)
       await loadStudents()
     } catch (e) { setError(e instanceof Error ? e.message : 'طالب علم محفوظ نہیں ہو سکا۔') }
+    finally { setBusy(false) }
+  }
+
+  async function changeStudentStatus(studentId: string, status: 'active' | 'inactive' | 'transferred' | 'completed') {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await updateStudent({ studentId, status })
+      setStudents(previous => previous.map(student => student.id === studentId ? { ...student, status } : student))
+      setNotice('طالب علم کی حیثیت اپ ڈیٹ کر دی گئی ہے۔ سابقہ ریکارڈ محفوظ ہے۔')
+    } catch (e) { setError(e instanceof Error ? e.message : 'حیثیت تبدیل نہیں ہو سکی۔') }
     finally { setBusy(false) }
   }
 
@@ -236,7 +246,7 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
           <div className="form-actions"><button className="primary-btn" disabled={busy}>{busy ? 'محفوظ ہو رہا ہے…' : 'ریکارڈ محفوظ کریں'}</button><button type="button" className="outline-btn" onClick={() => setShowStudentForm(false)}>منسوخ</button></div>
         </form>}
         {session.role === 'qari' && <div className="qari-actions"><button className="primary-btn" disabled={!students.length} onClick={() => {setSelectedStudent(students[0]?.id ?? '');setShowProgressForm(true)}}><CalendarCheck size={16}/> حاضری / سبق درج کریں</button><span>صرف اپنے سپرد طلبہ کے لیے</span></div>}
-        {loading ? <div className="loading-panel"><LoaderCircle className="spin" /> ریکارڈ لوڈ ہو رہا ہے…</div> : students.length === 0 ? <div className="empty-panel"><Users size={30}/><h3>ابھی کوئی طالب علم دستیاب نہیں</h3><p>{session.role === 'admin' ? 'نیا داخلہ شامل کرکے طلبہ کا ریکارڈ شروع کریں۔' : session.role === 'qari' ? 'منتظم سے طلبہ تفویض کروائیں۔' : 'منتظم سے اپنے بچے کا اکاؤنٹ لنک اور تصدیق کروائیں۔'}</p></div> : <div className="student-table-wrap"><table className="student-table"><thead><tr><th>شناختی نمبر</th><th>طالب علم</th><th>شعبہ</th><th>حیثیت</th><th>داخلہ تاریخ</th>{session.role === 'qari' && <th>کارروائی</th>}</tr></thead><tbody>{students.map(student => <tr key={student.id}><td dir="ltr">{student.studentCode || '—'}</td><td><strong>{student.fullName}</strong></td><td>{programNames[student.program]}</td><td><span className={student.status === 'active' ? 'status-active' : 'status-muted'}>{statusNames[student.status] ?? student.status}</span></td><td dir="ltr">{student.admissionDate || '—'}</td>{session.role === 'qari' && <td><button className="small-action" onClick={() => {setSelectedStudent(student.id);setShowProgressForm(true)}}>حاضری / سبق</button></td>}</tr>)}</tbody></table></div>}
+        {loading ? <div className="loading-panel"><LoaderCircle className="spin" /> ریکارڈ لوڈ ہو رہا ہے…</div> : students.length === 0 ? <div className="empty-panel"><Users size={30}/><h3>ابھی کوئی طالب علم دستیاب نہیں</h3><p>{session.role === 'admin' ? 'نیا داخلہ شامل کرکے طلبہ کا ریکارڈ شروع کریں۔' : session.role === 'qari' ? 'منتظم سے طلبہ تفویض کروائیں۔' : 'منتظم سے اپنے بچے کا اکاؤنٹ لنک اور تصدیق کروائیں۔'}</p></div> : <div className="student-table-wrap"><table className="student-table"><thead><tr><th>شناختی نمبر</th><th>طالب علم</th><th>شعبہ</th><th>حیثیت</th><th>داخلہ تاریخ</th>{(session.role === 'qari' || session.role === 'admin') && <th>کارروائی</th>}</tr></thead><tbody>{students.map(student => <tr key={student.id}><td dir="ltr">{student.studentCode || '—'}</td><td><strong>{student.fullName}</strong></td><td>{programNames[student.program]}</td><td><span className={student.status === 'active' ? 'status-active' : 'status-muted'}>{statusNames[student.status] ?? student.status}</span></td><td dir="ltr">{student.admissionDate || '—'}</td>{session.role === 'qari' && <td><button className="small-action" onClick={() => {setSelectedStudent(student.id);setShowProgressForm(true)}}>حاضری / سبق</button></td>}{session.role === 'admin' && <td><select className="status-select" value={student.status} disabled={busy} onChange={e => void changeStudentStatus(student.id,e.target.value as 'active'|'inactive'|'transferred'|'completed')}><option value="active">فعال</option><option value="inactive">غیرفعال</option><option value="transferred">منتقل</option><option value="completed">تعلیم مکمل</option></select></td>}</tr>)}</tbody></table></div>}
         {showProgressForm && session.role === 'qari' && <form className="workspace-form progress-form" onSubmit={submitAttendance}>
           <h3>روزانہ حاضری</h3><div className="form-grid"><label>طالب علم<select value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)}>{students.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}</select></label><label>تاریخ<input type="date" value={progressForm.date} onChange={e => setProgressForm(p => ({...p,date:e.target.value}))}/></label><label>نشست<select value={progressForm.session} onChange={e => setProgressForm(p => ({...p,session:e.target.value as 'morning'|'afternoon'|'evening'}))}><option value="morning">صبح</option><option value="afternoon">دوپہر</option><option value="evening">شام</option></select></label><label>حاضری<select value={progressForm.status} onChange={e => setProgressForm(p => ({...p,status:e.target.value as 'present'|'absent'|'late'|'leave'}))}><option value="present">حاضر</option><option value="absent">غیر حاضر</option><option value="late">تاخیر</option><option value="leave">چھٹی</option></select></label></div>
           <div className="form-actions"><button className="primary-btn" disabled={busy || !selectedStudent}>{busy ? 'محفوظ ہو رہا ہے…' : 'حاضری محفوظ کریں'}</button><button type="button" className="outline-btn" onClick={() => setShowProgressForm(false)}>بند کریں</button></div>
