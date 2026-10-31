@@ -73,3 +73,14 @@ export function recordDailyProgress(input: {
 }) {
   return call<typeof input, { recordId: string }>('recordDailyProgress', input)
 }
+
+export function recordCourseProgress(input: {
+  studentId: string
+  program: 'hifz' | 'nazra'
+  completedParas: number
+  currentPara: number
+  notes?: string
+  parentVisible?: boolean
+}) {
+  return call<typeof input, { studentId: string; program: string; completedParas: number; currentPara: number }>('recordCourseProgress', input)
+}
