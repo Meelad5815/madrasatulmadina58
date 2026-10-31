@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore'
 import { BookOpen, CalendarCheck, CheckCircle2, ClipboardList, LoaderCircle, Plus, RefreshCw, ShieldCheck, Users } from 'lucide-react'
 import { db } from '../lib/firebase'
-import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress } from '../services/madrasa'
+import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress, recordCourseProgress } from '../services/madrasa'
 
 type AccountRow = { uid: string; displayName: string; email: string }
 type ParentUpdate = { id: string; studentName: string; date: string; title: string; detail: string }
@@ -47,6 +47,7 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
   const [selectedStudent, setSelectedStudent] = useState('')
   const [studentForm, setStudentForm] = useState({ fullName: '', guardianName: '', guardianPhone: '', program: 'hifz' as 'hifz' | 'nazra' | 'qaida', admissionDate: pakistanDate() })
   const [progressForm, setProgressForm] = useState({ date: pakistanDate(), session: 'morning' as 'morning' | 'afternoon' | 'evening', status: 'present' as 'present' | 'absent' | 'late' | 'leave', sabaq: '', sabqi: '', manzil: '' })
+  const [courseForm, setCourseForm] = useState({ program: 'hifz' as 'hifz' | 'nazra', completedParas: '0', currentPara: '1', notes: '' })
   const [busy, setBusy] = useState(false)
 
   const loadStudents = useCallback(async () => {
@@ -171,6 +172,21 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
     finally { setBusy(false) }
   }
 
+  async function submitCourseProgress() {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await recordCourseProgress({
+        studentId: selectedStudent,
+        program: courseForm.program,
+        completedParas: Number(courseForm.completedParas),
+        currentPara: Number(courseForm.currentPara),
+        notes: courseForm.notes,
+      })
+      setNotice('حفظ / ناظرہ کی پیش رفت محفوظ ہو گئی۔ والدین کو دکھانے کے لیے ایڈمن کی منظوری ضروری ہے۔')
+    } catch (e) { setError(e instanceof Error ? e.message : 'تعلیمی ریکارڈ محفوظ نہیں ہو سکا۔') }
+    finally { setBusy(false) }
+  }
+
   const roleTitle = session.role === 'admin' ? 'ایڈمن ڈیش بورڈ' : session.role === 'qari' ? 'قاری پورٹل' : 'والدین پورٹل'
 
   return (
@@ -226,7 +242,15 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
           <div className="form-actions"><button className="primary-btn" disabled={busy || !selectedStudent}>{busy ? 'محفوظ ہو رہا ہے…' : 'حاضری محفوظ کریں'}</button><button type="button" className="outline-btn" onClick={() => setShowProgressForm(false)}>بند کریں</button></div>
           <div className="form-divider" /><h3>سبق، سبقی اور منزل</h3>
           <div className="form-grid"><label>سبق<input value={progressForm.sabaq} onChange={e => setProgressForm(p => ({...p,sabaq:e.target.value}))} placeholder="مثلاً سورۃ البقرہ، آیات..." /></label><label>سبقی<input value={progressForm.sabqi} onChange={e => setProgressForm(p => ({...p,sabqi:e.target.value}))} /></label><label>منزل<input value={progressForm.manzil} onChange={e => setProgressForm(p => ({...p,manzil:e.target.value}))} /></label></div>
-          <button type="button" className="primary-btn" disabled={busy || !selectedStudent} onClick={() => void submitProgress()}><ClipboardList size={16}/> پیش رفت محفوظ کریں</button>
+          <button type="button" className="primary-btn" disabled={busy || !selectedStudent} onClick={() => void submitProgress()}><ClipboardList size={16}/> روزانہ پیش رفت محفوظ کریں</button>
+          <div className="form-divider" /><h3>حفظ / ناظرہ کا مجموعی ریکارڈ</h3>
+          <div className="form-grid">
+            <label>تعلیمی شعبہ<select value={courseForm.program} onChange={e => setCourseForm(p => ({...p,program:e.target.value as 'hifz'|'nazra'}))}><option value="hifz">حفظ</option><option value="nazra">ناظرہ</option></select></label>
+            <label>مکمل شدہ پارے<input type="number" min="0" max="30" value={courseForm.completedParas} onChange={e => setCourseForm(p => ({...p,completedParas:e.target.value}))}/></label>
+            <label>موجودہ پارہ<input type="number" min="1" max="30" value={courseForm.currentPara} onChange={e => setCourseForm(p => ({...p,currentPara:e.target.value}))}/></label>
+            <label>اضافی نوٹس<input value={courseForm.notes} onChange={e => setCourseForm(p => ({...p,notes:e.target.value}))}/></label>
+          </div>
+          <button type="button" className="primary-btn" disabled={busy || !selectedStudent} onClick={() => void submitCourseProgress()}><BookOpen size={16}/> حفظ / ناظرہ ریکارڈ محفوظ کریں</button>
         </form>}
         {session.role === 'parent' && <section className="parent-history">
           <div className="workspace-toolbar"><div><h2>بچوں کی تازہ کارکردگی</h2><p>صرف استاد یا انتظامیہ کی جانب سے والدین کے لیے منظور شدہ معلومات</p></div></div>
