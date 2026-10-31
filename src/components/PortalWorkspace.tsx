@@ -4,10 +4,11 @@ import {
 } from 'firebase/firestore'
 import { BookOpen, CalendarCheck, CheckCircle2, ClipboardList, LoaderCircle, Plus, RefreshCw, ShieldCheck, Users } from 'lucide-react'
 import { db } from '../lib/firebase'
-import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress, recordCourseProgress, updateStudent } from '../services/madrasa'
+import { createStudent, createManagedAccount, assignStudentToQari, verifyParentChildLink, recordAttendance, recordDailyProgress, recordCourseProgress, updateStudent, setProgressParentVisibility } from '../services/madrasa'
 
 type AccountRow = { uid: string; displayName: string; email: string }
 type ParentUpdate = { id: string; studentName: string; date: string; title: string; detail: string }
+type PendingProgress = { id: string; studentName: string; date: string; sabaq: string; sabqi: string; manzil: string }
 
 type StudentRow = {
   id: string
@@ -30,6 +31,7 @@ function pakistanDate() {
 export default function PortalWorkspace({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const [students, setStudents] = useState<StudentRow[]>([])
   const [parentUpdates, setParentUpdates] = useState<ParentUpdate[]>([])
+  const [pendingProgress, setPendingProgress] = useState<PendingProgress[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -56,14 +58,18 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
     try {
       let ids: string[] = []
       if (session.role === 'admin') {
-        const [snap, qariSnap, parentSnap] = await Promise.all([
+        const [snap, qariSnap, parentSnap, progressSnap] = await Promise.all([
           getDocs(query(collection(db, 'students'), where('madrasaId', '==', session.madrasaId), limit(100))),
           getDocs(query(collection(db, 'teachers'), where('madrasaId', '==', session.madrasaId), limit(100))),
           getDocs(query(collection(db, 'parents'), where('madrasaId', '==', session.madrasaId), limit(100))),
+          getDocs(query(collection(db, 'progress_logs'), where('madrasaId', '==', session.madrasaId), where('parentVisible', '==', false), limit(50))),
         ])
-        setStudents(snap.docs.map(item => ({ id: item.id, ...(item.data() as Omit<StudentRow, 'id'>) })).sort((a,b) => b.admissionDate.localeCompare(a.admissionDate)))
+        const studentRows = snap.docs.map(item => ({ id: item.id, ...(item.data() as Omit<StudentRow, 'id'>) })).sort((a,b) => b.admissionDate.localeCompare(a.admissionDate))
+        setStudents(studentRows)
         setQariAccounts(qariSnap.docs.map(item => ({ uid: item.id, displayName: String(item.data().displayName ?? ''), email: String(item.data().email ?? '') })))
         setParentAccounts(parentSnap.docs.map(item => ({ uid: item.id, displayName: String(item.data().displayName ?? ''), email: String(item.data().email ?? '') })))
+        const names = new Map(studentRows.map(student => [student.id, student.fullName]))
+        setPendingProgress(progressSnap.docs.map(item => ({ id: item.id, studentName: names.get(String(item.data().studentId)) ?? 'طالب علم', date: String(item.data().date ?? ''), sabaq: String(item.data().sabaq ?? ''), sabqi: String(item.data().sabqi ?? ''), manzil: String(item.data().manzil ?? '') })))
         setLoading(false); return
       }
       if (session.role === 'qari') {
@@ -117,6 +123,16 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
       setShowStudentForm(false)
       await loadStudents()
     } catch (e) { setError(e instanceof Error ? e.message : 'طالب علم محفوظ نہیں ہو سکا۔') }
+    finally { setBusy(false) }
+  }
+
+  async function approveProgress(recordId: string, visible: boolean) {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await setProgressParentVisibility({ recordId, visible })
+      setPendingProgress(previous => previous.filter(item => item.id !== recordId))
+      setNotice(visible ? 'تعلیمی پیش رفت والدین کے لیے منظور کر دی گئی۔' : 'ریکارڈ والدین سے پوشیدہ رکھا گیا۔')
+    } catch (e) { setError(e instanceof Error ? e.message : 'منظوری محفوظ نہیں ہو سکی۔') }
     finally { setBusy(false) }
   }
 
@@ -239,6 +255,10 @@ export default function PortalWorkspace({ session, onLogout }: { session: Sessio
             <label>والدین کا اکاؤنٹ<select required value={parentLinkForm.parentUid} onChange={e => setParentLinkForm(p => ({...p,parentUid:e.target.value}))}><option value="">منتخب کریں</option>{parentAccounts.map(p => <option key={p.uid} value={p.uid}>{p.displayName} ({p.email})</option>)}</select></label>
           </div><div className="form-actions"><button className="primary-btn" disabled={busy || !students.length || !parentAccounts.length}>تعلق تصدیق کریں</button><button type="button" className="outline-btn" onClick={() => setShowParentLinkForm(false)}>منسوخ</button></div>
         </form>}
+        {session.role === 'admin' && pendingProgress.length > 0 && <section className="approval-section">
+          <div className="workspace-toolbar"><div><h2>والدین کے لیے منظوری کے منتظر ریکارڈ</h2><p>قاری کی درج کردہ پیش رفت کو جانچ کر والدین کے ساتھ شیئر کریں۔</p></div><span className="approval-count">{pendingProgress.length}</span></div>
+          <div className="approval-list">{pendingProgress.map(item => <article className="approval-item" key={item.id}><div><strong>{item.studentName}</strong><span dir="ltr">{item.date}</span></div><p>{[item.sabaq ? `سبق: ${item.sabaq}` : '', item.sabqi ? `سبقی: ${item.sabqi}` : '', item.manzil ? `منزل: ${item.manzil}` : ''].filter(Boolean).join(' • ') || 'روزانہ پیش رفت درج کی گئی ہے۔'}</p><div className="approval-buttons"><button className="small-action" disabled={busy} onClick={() => void approveProgress(item.id,true)}>والدین کو دکھائیں</button><button className="small-action reject-action" disabled={busy} onClick={() => void approveProgress(item.id,false)}>منظور نہ کریں</button></div></article>)}</div>
+        </section>}
         {session.role === 'admin' && <button className="primary-btn workspace-action" onClick={() => setShowStudentForm(!showStudentForm)}><Plus size={17} /> نیا طالب علم شامل کریں</button>}
         {showStudentForm && session.role === 'admin' && <form className="workspace-form" onSubmit={submitStudent}>
           <h3>نئے طالب علم کا داخلہ</h3>
