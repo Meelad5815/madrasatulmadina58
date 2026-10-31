@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -46,7 +47,7 @@ export const createManagedAccount = onCall({ region: REGION }, async (request) =
     throw new HttpsError('invalid-argument', 'درست ای میل ایڈریس درج کریں۔');
   }
 
-  const temporaryPassword = crypto.randomUUID() + 'Aa9!';
+  const temporaryPassword = randomUUID() + 'Aa9!';
   let user;
   try {
     user = await auth.createUser({ email, displayName, password: temporaryPassword, disabled: false });
