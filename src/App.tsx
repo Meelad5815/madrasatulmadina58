@@ -2,11 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, ArrowUpLeft, BookOpen, CalendarCheck, CheckCircle2, ChevronLeft,
-  ClipboardList, GraduationCap, HeartHandshake, Home, LockKeyhole, LogIn,
-  Mail, Menu, MessageCircle, ShieldCheck, Sparkles, Users, X, Building2,
-  BookMarked, FileCheck2, Image, Megaphone, Phone, MapPin, Globe2, LogOut,
-  LayoutDashboard, UserRound, Settings, ChartNoAxesCombined, Clock3
+  ArrowLeft, ArrowUpLeft, BookOpen, CheckCircle2, ChevronLeft,
+  GraduationCap, HeartHandshake, LockKeyhole, LogIn, Mail, Menu,
+  ShieldCheck, Sparkles, Users, X, BookMarked, Phone, MapPin, Globe2,
+  LayoutDashboard
 } from 'lucide-react'
 import { auth, isFirebaseConfigured } from './lib/firebase'
 import type { UserRole } from './types'
