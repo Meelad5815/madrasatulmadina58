@@ -344,3 +344,56 @@ export const setProgressParentVisibility = onCall({ region: REGION }, async (req
   await writeAudit(actorUid, visible ? 'progress.shared_with_parent' : 'progress.hidden_from_parent', 'progress_log', recordId);
   return { recordId, parentVisible: visible };
 });
+
+
+export const recordCourseProgress = onCall({ region: REGION }, async (request) => {
+  const caller = request.auth;
+  if (!caller || caller.token.madrasaId !== MADRASA_ID
+    || !['admin', 'qari'].includes(String(caller.token.role))) {
+    throw new HttpsError('permission-denied', 'تعلیمی پیش رفت درج کرنے کی اجازت نہیں۔');
+  }
+  const studentId = requiredString(request.data?.studentId, 'studentId', 128);
+  const program = request.data?.program;
+  if (program !== 'hifz' && program !== 'nazra') {
+    throw new HttpsError('invalid-argument', 'حفظ یا ناظرہ منتخب کریں۔');
+  }
+  const studentSnap = await db.collection('students').doc(studentId).get();
+  if (!studentSnap.exists || studentSnap.data()?.madrasaId !== MADRASA_ID) {
+    throw new HttpsError('not-found', 'طالب علم کا ریکارڈ نہیں ملا۔');
+  }
+  if (caller.token.role === 'qari') {
+    const assignment = await db.collection('student_assignments').doc(`${caller.uid}_${studentId}`).get();
+    if (!assignment.exists || assignment.data()?.status !== 'active') {
+      throw new HttpsError('permission-denied', 'یہ طالب علم آپ کے سپرد نہیں ہے۔');
+    }
+  }
+  const completedParas = Number(request.data?.completedParas ?? 0);
+  const currentPara = Number(request.data?.currentPara ?? 1);
+  if (!Number.isInteger(completedParas) || completedParas < 0 || completedParas > 30
+    || !Number.isInteger(currentPara) || currentPara < 1 || currentPara > 30) {
+    throw new HttpsError('invalid-argument', 'پاروں کی تعداد 0 سے 30 اور موجودہ پارہ 1 سے 30 کے درمیان درج کریں۔');
+  }
+  const summaryRef = db.collection(program === 'hifz' ? 'hifz_records' : 'nazra_records').doc(studentId);
+  const historyRef = db.collection('course_progress_history').doc();
+  const payload = {
+    madrasaId: MADRASA_ID,
+    studentId,
+    program,
+    completedParas,
+    currentPara,
+    notes: typeof request.data?.notes === 'string' ? request.data.notes.trim().slice(0, 500) : '',
+    parentVisible: caller.token.role === 'admin' && request.data?.parentVisible === true,
+    updatedBy: caller.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await db.runTransaction(async (tx) => {
+    tx.set(summaryRef, { ...payload, createdAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.create(historyRef, {
+      ...payload,
+      createdAt: FieldValue.serverTimestamp(),
+      actorUid: caller.uid,
+    });
+  });
+  await writeAudit(caller.uid, `${program}.progress.updated`, program, studentId);
+  return { studentId, program, completedParas, currentPara };
+});
