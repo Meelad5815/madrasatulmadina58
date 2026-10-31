@@ -1,0 +1,13 @@
+{
+  "name": "MRK Madrasa Management System 58",
+  "short_name": "MRK Madrasa 58",
+  "lang": "ur",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f8f5",
+  "theme_color": "#075b46",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
